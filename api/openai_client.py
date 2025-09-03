@@ -33,6 +33,9 @@ from openai import (
     UnprocessableEntityError,
     BadRequestError,
 )
+
+# For backoff decorator - alias APITimeoutError as Timeout for convenience
+Timeout = APITimeoutError
 from openai.types import (
     Completion,
     CreateEmbeddingResponse,
@@ -179,13 +182,19 @@ class OpenAIClient(ModelClient):
         self._env_api_key_name = env_api_key_name
         self._env_base_url_name = env_base_url_name
         self.base_url = base_url or os.getenv(self._env_base_url_name, "https://api.openai.com/v1")
-        self.sync_client = self.init_sync_client()
+        self.sync_client = None  # lazy initialization - only create when needed
         self.async_client = None  # only initialize if the async call is called
         self.chat_completion_parser = (
             chat_completion_parser or get_first_message_content
         )
         self._input_type = input_type
         self._api_kwargs = {}  # add api kwargs when the OpenAI Client is called
+
+    def get_sync_client(self):
+        """Get sync client with lazy initialization"""
+        if self.sync_client is None:
+            self.sync_client = self.init_sync_client()
+        return self.sync_client
 
     def init_sync_client(self):
         api_key = self._api_key or os.getenv(self._env_api_key_name)
@@ -415,12 +424,12 @@ class OpenAIClient(ModelClient):
         log.info(f"api_kwargs: {api_kwargs}")
         self._api_kwargs = api_kwargs
         if model_type == ModelType.EMBEDDER:
-            return self.sync_client.embeddings.create(**api_kwargs)
+            return self.get_sync_client().embeddings.create(**api_kwargs)
         elif model_type == ModelType.LLM:
             if "stream" in api_kwargs and api_kwargs.get("stream", False):
                 log.debug("streaming call")
                 self.chat_completion_parser = handle_streaming_response
-                return self.sync_client.chat.completions.create(**api_kwargs)
+                return self.get_sync_client().chat.completions.create(**api_kwargs)
             else:
                 log.debug("non-streaming call converted to streaming")
                 # Make a copy of api_kwargs to avoid modifying the original
@@ -428,7 +437,7 @@ class OpenAIClient(ModelClient):
                 streaming_kwargs["stream"] = True
 
                 # Get streaming response
-                stream_response = self.sync_client.chat.completions.create(**streaming_kwargs)
+                stream_response = self.get_sync_client().chat.completions.create(**streaming_kwargs)
 
                 # Accumulate all content from the stream
                 accumulated_content = ""
@@ -463,13 +472,13 @@ class OpenAIClient(ModelClient):
             if "image" in api_kwargs:
                 if "mask" in api_kwargs:
                     # Image edit
-                    response = self.sync_client.images.edit(**api_kwargs)
+                    response = self.get_sync_client().images.edit(**api_kwargs)
                 else:
                     # Image variation
-                    response = self.sync_client.images.create_variation(**api_kwargs)
+                    response = self.get_sync_client().images.create_variation(**api_kwargs)
             else:
                 # Image generation
-                response = self.sync_client.images.generate(**api_kwargs)
+                response = self.get_sync_client().images.generate(**api_kwargs)
             return response.data
         else:
             raise ValueError(f"model_type {model_type} is not supported")
@@ -485,6 +494,23 @@ class OpenAIClient(ModelClient):
         ),
         max_time=5,
     )
+    def get_async_client(self):
+        """Get async client with lazy initialization"""
+        if self.async_client is None:
+            self.async_client = self.init_async_client()
+        return self.async_client
+
+    @backoff.on_exception(
+        backoff.expo,
+        (
+            RateLimitError,
+            InternalServerError,
+            Timeout,
+            UnprocessableEntityError,
+            BadRequestError,
+        ),
+        max_time=5,
+    )
     async def acall(
         self, api_kwargs: Dict = {}, model_type: ModelType = ModelType.UNDEFINED
     ):
@@ -493,26 +519,24 @@ class OpenAIClient(ModelClient):
         """
         # store the api kwargs in the client
         self._api_kwargs = api_kwargs
-        if self.async_client is None:
-            self.async_client = self.init_async_client()
         if model_type == ModelType.EMBEDDER:
-            return await self.async_client.embeddings.create(**api_kwargs)
+            return await self.get_async_client().embeddings.create(**api_kwargs)
         elif model_type == ModelType.LLM:
-            return await self.async_client.chat.completions.create(**api_kwargs)
+            return await self.get_async_client().chat.completions.create(**api_kwargs)
         elif model_type == ModelType.IMAGE_GENERATION:
             # Determine which image API to call based on the presence of image/mask
             if "image" in api_kwargs:
                 if "mask" in api_kwargs:
                     # Image edit
-                    response = await self.async_client.images.edit(**api_kwargs)
+                    response = await self.get_async_client().images.edit(**api_kwargs)
                 else:
                     # Image variation
-                    response = await self.async_client.images.create_variation(
+                    response = await self.get_async_client().images.create_variation(
                         **api_kwargs
                     )
             else:
                 # Image generation
-                response = await self.async_client.images.generate(**api_kwargs)
+                response = await self.get_async_client().images.generate(**api_kwargs)
             return response.data
         else:
             raise ValueError(f"model_type {model_type} is not supported")
