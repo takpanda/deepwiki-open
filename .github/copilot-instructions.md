@@ -18,10 +18,13 @@ DeepWiki-Open is a hybrid Next.js frontend + Python FastAPI backend application 
 
 #### Frontend Dependencies
 ```bash
-# Install frontend dependencies (yarn preferred over npm)
+# Option 1: npm (recommended for speed)
+npm install
+
+# Option 2: yarn (used in project documentation)
 yarn install
 ```
-**Timing**: Takes approximately 48 seconds. NEVER CANCEL - wait for completion.
+**Timing**: npm ~4 seconds, yarn ~48 seconds. NEVER CANCEL - wait for completion.
 
 #### Backend Dependencies  
 ```bash
@@ -40,6 +43,8 @@ uv sync
 #### Frontend Development
 ```bash
 # Start frontend development server
+npm run dev
+# or
 yarn dev
 ```
 - **Port**: 3000
@@ -64,6 +69,8 @@ python3 -m api.main --port 8001
 
 #### Frontend Build
 ```bash
+npm run build
+# or
 yarn build
 ```
 **CRITICAL LIMITATION**: Build fails in network-restricted environments due to Google Fonts dependency.
@@ -78,6 +85,8 @@ yarn build
 
 #### Frontend Linting
 ```bash
+npm run lint
+# or
 yarn lint
 ```
 **Timing**: Takes ~3 seconds. Always run before committing.
@@ -145,7 +154,7 @@ After making changes, always test these scenarios:
 
 1. **Frontend-Only Validation** (works in network-restricted environments):
    ```bash
-   yarn dev
+   npm run dev  # or yarn dev
    # Navigate to http://localhost:3000
    # Verify UI loads and displays properly
    # Check browser console for errors (backend connection errors are expected)
@@ -157,7 +166,7 @@ After making changes, always test these scenarios:
    python3 -m api.main --port 8001
    
    # Terminal 2: Start frontend  
-   yarn dev
+   npm run dev  # or yarn dev
    
    # Navigate to http://localhost:3000
    # Test repository URL input and wiki generation
@@ -166,6 +175,8 @@ After making changes, always test these scenarios:
 #### Pre-Commit Validation
 Always run these commands before committing:
 ```bash
+npm run lint                 # Frontend linting (~3 seconds)
+# or
 yarn lint                    # Frontend linting (~3 seconds)
 # Note: Python tests require network access and may fail in restricted environments
 ```
@@ -189,7 +200,7 @@ yarn lint                    # Frontend linting (~3 seconds)
 - **Frontend development server**: Ready in ~1 second
 - **Frontend build**: ~48 seconds (when network is available)
 - **Backend startup**: Depends on network access for initial tiktoken download
-- **Dependency installation**: Frontend ~48s, Backend ~35s
+- **Dependency installation**: npm ~4s, yarn ~48s, Backend ~35s
 
 ### Technology Stack
 - **Frontend**: Next.js 15.3.1, TypeScript, React 19, Tailwind CSS
